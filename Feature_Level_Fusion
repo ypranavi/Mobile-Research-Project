@@ -1,0 +1,127 @@
+# Importing the dlib library for face detection and landmark prediction
+import dlib
+# Importing matplotlib for plotting images
+import matplotlib.pyplot as plt
+# Importing numpy for numerical operations
+import numpy as np
+# Importing OpenCV for image processing
+import cv2
+# Importing math for mathematical operations
+import math
+# Importing os for file and directory operations
+import os
+
+def distances1(points):
+    """
+    Calculate the Euclidean distance between all pairs of points.
+    :param points: An array of 2D points
+    :return: A list of Euclidean distances between all pairs of points
+    """
+    dist = []  # Initialize an empty list to store distances
+    for i in range(points.shape[0]):  # Loop through each point as the first point
+        for j in range(points.shape[0]):  # Loop through each point as the second point
+            p1 = points[i, :]  # Extract the coordinates of the first point
+            p2 = points[j, :]  # Extract the coordinates of the second point
+            # Calculate the Euclidean distance and append to the list
+            dist.append(math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2))
+    return dist  # Return the list of distances
+
+def distances2(points):
+    """
+    Calculate the Manhattan distance between all pairs of points.
+    :param points: An array of 2D points
+    :return: A list of Manhattan distances between all pairs of points
+    """
+    dist = []  # Initialize an empty list to store distances
+    for i in range(points.shape[0]):  # Loop through each point as the first point
+        for j in range(points.shape[0]):  # Loop through each point as the second point
+            p1 = points[i, :]  # Extract the coordinates of the first point
+            p2 = points[j, :]  # Extract the coordinates of the second point
+            # Calculate the Manhattan distance and append to the list
+            dist.append(abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]))
+    return dist  # Return the list of distances
+
+def get_bounding_box(rect):
+    """
+    Convert a dlib rectangle object to (x, y, w, h) format.
+    :param rect: A dlib rectangle object representing a face bounding box
+    :return: A tuple (x, y, w, h) representing the bounding box
+    """
+    x = rect.left()  # Get the left coordinate
+    y = rect.top()  # Get the top coordinate
+    w = rect.right() - x  # Calculate the width
+    h = rect.bottom() - y  # Calculate the height
+    return x, y, w, h  # Return the bounding box coordinates
+
+def shape_to_np(shape, num_coords, dtype="int"):
+    """
+    Convert dlib shape object (landmarks) to a numpy array.
+    :param shape: A dlib shape object containing facial landmarks
+    :param num_coords: Number of landmarks to extract
+    :param dtype: Data type of the output array
+    :return: A numpy array of (x, y) coordinates for the landmarks
+    """
+    coords = np.zeros((num_coords, 2), dtype=dtype)  # Initialize the array
+    for i in range(0, num_coords):  # Loop through each landmark
+        coords[i] = (shape.part(i).x, shape.part(i).y)  # Extract (x, y) and store
+    return coords  # Return the numpy array of coordinates
+
+def get_landmarks(images, labels, save_directory="", num_coords=5, to_save=False):
+    """
+    Extract facial landmarks and optionally save images with landmarks drawn.
+    :param images: List of images to process
+    :param labels: List of corresponding labels for the images
+    :param save_directory: Directory to save images with landmarks (if enabled)
+    :param num_coords: Number of landmarks to extract (e.g., 5 or 68)
+    :param to_save: Boolean indicating whether to save images with landmarks
+    :return: A list of landmark distances and corresponding labels
+    """
+    print("Getting %d facial landmarks" % num_coords)  # Inform about the task
+    landmarks = []  # List to store distances for all images
+    new_labels = []  # List to store labels for detected faces
+    img_ct = 0  # Counter for processed images
+    
+    # Choose the appropriate landmark predictor file based on the number of coordinates
+    predictor_path = 'shape_predictor_5_face_landmarks.dat' if num_coords == 5 else 'shape_predictor_68_face_landmarks.dat'
+    
+    # Initialize the face detector and landmark predictor
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor(predictor_path)
+    
+    for img, label in zip(images, labels):  # Loop through images and labels
+        img_ct += 1  # Increment image counter
+        # Detect faces in the image (upsample once for better detection)
+        detected_faces = detector(img, 1)
+        
+        for d in detected_faces:  # Loop through detected faces
+            new_labels.append(label)  # Add the label for this face
+            x, y, w, h = get_bounding_box(d)  # Get bounding box for the face
+            
+            # Get the landmarks for the face and convert to numpy array
+            points = shape_to_np(predictor(img, d), num_coords)
+            
+            # Calculate distances between landmarks
+            dist_1 = distances1(points)  # Euclidean distances
+            dist_2 = distances2(points)  # Manhattan distances
+            dist = dist_1 + dist_2  # Combine distances
+            
+            # Print the number of distances calculated
+            print(len(dist_1))
+            print(len(dist_2))
+            print(len(dist))
+            
+            # Add distances to the landmarks list
+            landmarks.append(dist)
+            
+            if to_save:  # If saving is enabled
+                for (x_, y_) in points:  # Draw landmarks on the image
+                    cv2.circle(img, (x_, y_), 1, (0, 255, 0), -1)
+                plt.figure()  # Create a new plot
+                plt.imshow(img)  # Display the image with landmarks
+                if not os.path.isdir(save_directory):  # Create directory if needed
+                    os.mkdir(save_directory)
+                plt.savefig(save_directory + label + '%d.png' % img_ct)  # Save the image
+                plt.close()  # Close the plot
+                
+        if img_ct % 50 == 0:  # Log progress every 50 images
+            print("%d images processed" % img_ct)
